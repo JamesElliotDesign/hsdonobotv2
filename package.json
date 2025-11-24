@@ -1,0 +1,20 @@
+{
+  "name": "donatorbot",
+  "version": "1.0.0",
+  "description": "A Discord bot for managing donator roles.",
+  "main": "donatorbot.js",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cftools-sdk": "^3.5.0",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mongodb": "^7.0.0",
+    "mongoose": "^9.0.0",
+    "node-cron": "^4.1.0",
+    "node-fetch": "^2.7.0"
+  },
+  "scripts": {
+    "start": "node donatorbot.js"
+  }
+}
