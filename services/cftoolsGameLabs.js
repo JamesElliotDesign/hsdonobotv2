@@ -12,12 +12,6 @@ let authToken = null;
 let tokenExpiration = 0;
 
 async function authenticate() {
-  if (!APPLICATION_ID || !APPLICATION_SECRET || !SERVER_API_ID) {
-    throw new Error(
-      "Missing CFTOOLS_APPLICATION_ID / CFTOOLS_SECRET_KEY (or CFTOOLS_APPLICATION_SECRET) / CFTOOLS_SERVER_API_ID in env."
-    );
-  }
-
   const response = await axios.post(
     `${API_BASE_URL}/auth/register`,
     {
@@ -31,7 +25,6 @@ async function authenticate() {
 
   authToken = response.data.token;
   tokenExpiration = Date.now() + 24 * 60 * 60 * 1000; // 24h
-
   console.log("✅ [CFTOOLS] Authenticated with CF Tools data API.");
 }
 
@@ -43,11 +36,6 @@ async function ensureAuth() {
 
 /**
  * Spawn an item on a player's position via GameLabs.
- *
- * @param {string} steam64 - Player's SteamID64
- * @param {string} itemClassname - DayZ classname of item
- * @param {number} quantity - Number of items
- * @param {boolean} stacked - Spawn as stack if supported
  */
 async function spawnItemOnPlayer(steam64, itemClassname, quantity, stacked = true) {
   await ensureAuth();
@@ -55,10 +43,10 @@ async function spawnItemOnPlayer(steam64, itemClassname, quantity, stacked = tru
   const payload = {
     actionCode: "CFCloud_SpawnPlayerItem",
     actionContext: "player",
-    referenceKey: steam64, // must be Steam64 ID
+    referenceKey: steam64,
     parameters: {
       debug: {
-        valueBoolean: 0, // no debug spawn
+        valueBoolean: 0,
       },
       item: {
         valueString: itemClassname,
@@ -87,7 +75,7 @@ async function spawnItemOnPlayer(steam64, itemClassname, quantity, stacked = tru
 }
 
 /**
- * (Optional) Teleport helper if you need it later
+ * Optional teleport helper if you need it later.
  */
 async function teleportPlayer(steam64, [x, y, z]) {
   await ensureAuth();
@@ -119,7 +107,35 @@ async function teleportPlayer(steam64, [x, y, z]) {
   return response.data;
 }
 
+/**
+ * Broadcast a message to in-game chat (server-wide).
+ */
+async function sendServerMessage(content) {
+  await ensureAuth();
+
+  const response = await axios.post(
+    `${API_BASE_URL}/server/${SERVER_API_ID}/message-server`,
+    { content },
+    {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "User-Agent": APPLICATION_ID,
+      },
+    }
+  );
+
+  if (response.status === 204) {
+    console.log(`✅ [CHAT] Sent server message: "${content}"`);
+  } else {
+    console.log(
+      `⚠️ [CHAT] Unexpected response from CFTools message-server: ${response.status}`,
+      response.data
+    );
+  }
+}
+
 module.exports = {
   spawnItemOnPlayer,
   teleportPlayer,
+  sendServerMessage,
 };

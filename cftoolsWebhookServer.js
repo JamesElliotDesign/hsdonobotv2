@@ -2,13 +2,14 @@
 const express = require('express');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
-const { payOutVoteRewards, payOutDonationRewards } = require('./services/claims');
+const { payOutDonationRewards, handleIngameClaimVote } = require('./services/claims');
+const { sendServerMessage } = require('./services/cftoolsGameLabs');
 
 const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET;
 
 function isValidSignature(req) {
-  if (!WEBHOOK_SECRET) return true; // optional strict mode
-  
+  if (!WEBHOOK_SECRET) return true; // optional: set to false if you want strict mode
+
   const deliveryId = req.headers['x-hephaistos-delivery'];
   const receivedSig = req.headers['x-hephaistos-signature'];
   if (!deliveryId || !receivedSig) return false;
@@ -21,11 +22,20 @@ function isValidSignature(req) {
   return localSig === receivedSig;
 }
 
+// From your actual payload:
+// {
+//   cftools_id: '...',
+//   channel: 'Direct',
+//   message: '!claimvote',
+//   player_id: '...',
+//   player_name: 'Jay',
+//   player_steam64: '76561199216648991'
+// }
 function extractChatInfo(payload) {
   return {
     message: payload.message || '',
     steamId64: payload.player_steam64 || null,
-    playerName: payload.player_name || null
+    playerName: payload.player_name || null,
   };
 }
 
@@ -37,29 +47,24 @@ function startCFToolsWebhookServer() {
     const eventType = req.headers['x-hephaistos-event'];
     const deliveryId = req.headers['x-hephaistos-delivery'];
 
-    // 1️⃣ Validate signature
     if (!isValidSignature(req)) {
       console.warn('❌ Invalid CFTools signature');
       return res.status(204).end();
     }
 
-    // 2️⃣ Handle verification handshake
     if (eventType === 'verification') {
       console.log(`✅ Webhook verified (delivery ${deliveryId})`);
       return res.status(204).end();
     }
 
-    // 3️⃣ FILTER: Only process actual chat events
     if (eventType !== 'user.chat') {
-      // Any non-chat event gets ignored
       return res.status(204).end();
     }
 
-    // 4️⃣ Extract chat info from the payload
     const payload = req.body;
     console.log(`📨 Received CHAT event: ${eventType}`, payload);
 
-    const { steamId64, message } = extractChatInfo(payload);
+    const { steamId64, message, playerName } = extractChatInfo(payload);
     if (!steamId64 || !message) {
       console.log('⚠️ Missing steamId or message in webhook payload.');
       return res.status(204).end();
@@ -68,21 +73,58 @@ function startCFToolsWebhookServer() {
     const cmd = message.trim().toLowerCase();
 
     try {
-      // 5️⃣ Run claim commands
       if (cmd.startsWith('/claimvotes')) {
-        const result = await payOutVoteRewards(steamId64);
-        console.log(`🎟 Vote claim result for ${steamId64}:`, result);
+        const result = await handleIngameClaimVote(steamId64);
+        console.log(`🎟 !claimvote result for ${steamId64}:`, result);
+
+        // result = { claimedCode, newVoteTokens, tokensPaid, votesUpdated }
+        if (result.tokensPaid > 0) {
+          await sendServerMessage(
+            `${playerName || 'A player'} claimed ${result.tokensPaid} Reward Tokens from their votes!`
+          );
+        } else {
+          // No tokens paid – message depends on claimedCode
+          if (result.claimedCode === 0) {
+            await sendServerMessage(
+              `${playerName || 'You'} have no unclaimed vote rewards. Make sure you voted on Top-Games using your SteamID this month.`
+            );
+          } else if (result.claimedCode === 2) {
+            await sendServerMessage(
+              `${playerName || 'You'} have already claimed your latest vote rewards or have no unclaimed rewards.`
+            );
+          } else {
+            await sendServerMessage(
+              `${playerName || 'You'} have no unclaimed Reward Tokens at this time.`
+            );
+          }
+        }
       }
 
       if (cmd.startsWith('/claimdono')) {
         const result = await payOutDonationRewards(steamId64);
-        console.log(`💰 Donation claim result for ${steamId64}:`, result);
+        console.log(`💰 !claimdonation result for ${steamId64}:`, result);
+
+        if (result.tokensPaid > 0) {
+          await sendServerMessage(
+            `${playerName || 'A player'} claimed ${result.tokensPaid} Hacksaw Tokens from their donations!`
+          );
+        } else {
+          let msg = `${playerName || 'You'} have no unclaimed donation tokens.`;
+          if (result.reason === 'no_steam_link') {
+            msg = `${playerName || 'You'} do not have a donation account linked to this SteamID.`;
+          } else if (result.reason === 'no_donation_record') {
+            msg = `${playerName || 'You'} do not have any recorded donations.`;
+          }
+          await sendServerMessage(msg);
+        }
       }
     } catch (err) {
       console.error('❌ Error running in-game claim:', err);
+      await sendServerMessage(
+        `${playerName || 'A player'} attempted to claim tokens, but an error occurred. Please contact staff if this persists.`
+      );
     }
 
-    // 6️⃣ REQUIRED BY CFTools — must always respond with 204 + empty body
     return res.status(204).end();
   });
 
