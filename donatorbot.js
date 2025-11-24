@@ -7,6 +7,7 @@ const cron = require('node-cron');
 const weeklyBackup = require('./tasks/weeklyBackup');
 const pqExpiryCheck = require('./tasks/pqExpiryCheck');
 const { connectToDatabase } = require('./db');
+const { startCFToolsWebhookServer } = require('./cftoolsWebhookServer');
 
 const client = new Client({
     intents: [
@@ -76,16 +77,16 @@ client.on('interactionCreate', async interaction => {
 });
 
 (async () => {
-    try {
-        await connectToDatabase();
+  try {
+    await connectToDatabase();
 
-        // If you have any code that needs DB on startup (e.g. warm caches),
-        // you can safely put it here later.
+    // Start the CFTools webhook HTTP server
+    startCFToolsWebhookServer();
 
-        await client.login(TOKEN);
-        console.log('🤖 Donator bot logged in.');
-    } catch (err) {
-        console.error('❌ Failed to start bot:', err);
-        process.exit(1);
-    }
+    await client.login(TOKEN);
+    console.log('🤖 Donator bot logged in.');
+  } catch (err) {
+    console.error('❌ Failed to start bot:', err);
+    process.exit(1);
+  }
 })();
