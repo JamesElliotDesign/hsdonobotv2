@@ -2,13 +2,13 @@
 const express = require('express');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
-const { payOutDonationRewards, handleIngameClaimVote } = require('./services/claims');
+const { payOutDonationRewards, payOutVoteRewards } = require('./services/claims');
 const { sendServerMessage } = require('./services/cftoolsGameLabs');
 
 const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET;
 
 function isValidSignature(req) {
-  if (!WEBHOOK_SECRET) return true; // optional: set to false if you want strict mode
+  if (!WEBHOOK_SECRET) return true;
 
   const deliveryId = req.headers['x-hephaistos-delivery'];
   const receivedSig = req.headers['x-hephaistos-signature'];
@@ -22,15 +22,6 @@ function isValidSignature(req) {
   return localSig === receivedSig;
 }
 
-// From your actual payload:
-// {
-//   cftools_id: '...',
-//   channel: 'Direct',
-//   message: '!claimvote',
-//   player_id: '...',
-//   player_name: 'Jay',
-//   player_steam64: '76561199216648991'
-// }
 function extractChatInfo(payload) {
   return {
     message: payload.message || '',
@@ -73,47 +64,35 @@ function startCFToolsWebhookServer() {
     const cmd = message.trim().toLowerCase();
 
     try {
-      if (cmd.startsWith('/claimvotes')) {
-        const result = await handleIngameClaimVote(steamId64);
-        console.log(`🎟 !claimvote result for ${steamId64}:`, result);
+      if (cmd.startsWith('/claimvotes') || cmd.startsWith('!claimvote')) {
+        const result = await payOutVoteRewards(steamId64);
+        console.log(`🎟 claimvotes result for ${steamId64}:`, result);
 
-        // result = { claimedCode, newVoteTokens, tokensPaid, votesUpdated }
         if (result.tokensPaid > 0) {
           await sendServerMessage(
             `${playerName || 'A player'} claimed ${result.tokensPaid} Reward Tokens from their votes!`
           );
         } else {
-          // No tokens paid – message depends on claimedCode
-          if (result.claimedCode === 0) {
-            await sendServerMessage(
-              `${playerName || 'You'} has no unclaimed vote rewards. Make sure you voted on Top-Games using your SteamID this month.`
-            );
-          } else if (result.claimedCode === 2) {
-            await sendServerMessage(
-              `${playerName || 'You'} has already claimed their latest vote rewards or have no unclaimed rewards.`
-            );
-          } else {
-            await sendServerMessage(
-              `${playerName || 'You'} has no unclaimed Reward Tokens at this time.`
-            );
-          }
+          await sendServerMessage(
+            `${playerName || 'You'} has no unclaimed Reward Tokens at this time.`
+          );
         }
       }
 
-      if (cmd.startsWith('/claimdono')) {
+      if (cmd.startsWith('/claimdono') || cmd.startsWith('!claimdonation')) {
         const result = await payOutDonationRewards(steamId64);
-        console.log(`💰 !claimdonation result for ${steamId64}:`, result);
+        console.log(`💰 claimdonation result for ${steamId64}:`, result);
 
         if (result.tokensPaid > 0) {
           await sendServerMessage(
             `${playerName || 'A player'} claimed ${result.tokensPaid} Hacksaw Tokens from their donations!`
           );
         } else {
-          let msg = `${playerName || 'You'} have no unclaimed donation tokens.`;
+          let msg = `${playerName || 'You'} has no unclaimed donation tokens.`;
           if (result.reason === 'no_steam_link') {
-            msg = `${playerName || 'You'} do not have a donation account linked to this SteamID.`;
+            msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
           } else if (result.reason === 'no_donation_record') {
-            msg = `${playerName || 'You'} do not have any recorded donations.`;
+            msg = `${playerName || 'You'} does not have any recorded donations.`;
           }
           await sendServerMessage(msg);
         }
