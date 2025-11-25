@@ -86,15 +86,15 @@ function startCFToolsWebhookServer() {
           // No tokens paid – message depends on claimedCode
           if (result.claimedCode === 0) {
             await sendServerMessage(
-              `${playerName || 'You'} have no unclaimed vote rewards. Make sure you voted on Top-Games using your SteamID this month.`
+              `${playerName || 'You'} has no unclaimed vote rewards. Make sure you voted on Top-Games using your SteamID this month.`
             );
           } else if (result.claimedCode === 2) {
             await sendServerMessage(
-              `${playerName || 'You'} have already claimed your latest vote rewards or have no unclaimed rewards.`
+              `${playerName || 'You'} has already claimed their latest vote rewards or have no unclaimed rewards.`
             );
           } else {
             await sendServerMessage(
-              `${playerName || 'You'} have no unclaimed Reward Tokens at this time.`
+              `${playerName || 'You'} has no unclaimed Reward Tokens at this time.`
             );
           }
         }
