@@ -124,7 +124,7 @@ module.exports = {
         }
 
         // 💰 Donation token logic: 10 Hacksaw Tokens per £1 donated
-        const tokensToCredit = Math.floor(amount * 10);
+        const tokensToCredit = Math.floor(amount * 100);
         donation.unclaimedDonationTokens = (donation.unclaimedDonationTokens || 0) + tokensToCredit;
 
         // Save donation changes
