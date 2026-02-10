@@ -15,7 +15,18 @@ const roles = [
     { id: "1345838625757204640", amount: 150 },
     { id: "1345836451362766880", amount: 100 },
     { id: "1345834598969643221", amount: 50 },
-    { id: "1227025687316005015", amount: 15 }
+    { id: "1227025687316005015", amount: 20 }
+];
+// Rank ID Cards thresholds (by TOTAL donated)
+const rankCards = [
+    { amount: 2000, classname: "HS_RANKIDDIAMOND", label: "Diamond Rank ID Card" },
+    { amount: 1000, classname: "HS_RANKIDAQUAMARINE", label: "Aquamarine Rank ID Card" },
+    { amount: 500, classname: "HS_RANKIDTURQUOISE", label: "Turquoise Rank ID Card" },
+    { amount: 250, classname: "HS_RANKIDIOLITE", label: "Iolite Rank ID Card" },
+    { amount: 150, classname: "HS_RANKIDRUBY", label: "Ruby Rank ID Card" },
+    { amount: 100, classname: "HS_RANKIDAMBER", label: "Amber Rank ID Card" },
+    { amount: 50, classname: "HS_RANKIDJADE", label: "Jade Rank ID Card" },
+    { amount: 20, classname: "HS_RANKIDAMETHYST", label: "Amethyst Rank ID Card" },
 ];
 
 function getRoleForDonation(totalAmount) {
@@ -98,6 +109,22 @@ module.exports = {
             at: now,
             addedBy: interaction.user.id
         });
+        // Rank ID Cards: credit any newly-earned cards (claimable once)
+        const alreadyUnclaimed = new Set(donation.unclaimedRankCards || []);
+        const alreadyClaimed = new Set(donation.claimedRankCards || []);
+
+        const newlyCreditedCards = [];
+
+        for (const rc of rankCards) {
+            if (donation.total >= rc.amount) {
+                const alreadyHasIt = alreadyUnclaimed.has(rc.classname) || alreadyClaimed.has(rc.classname);
+                if (!alreadyHasIt) {
+                    donation.unclaimedRankCards = donation.unclaimedRankCards || [];
+                    donation.unclaimedRankCards.push(rc.classname);
+                    newlyCreditedCards.push(rc);
+                }
+            }
+        }
 
         let pqGranted = false;
         let pqExtended = false;
@@ -154,7 +181,10 @@ module.exports = {
         `✅ Added **£${amount}** to ${user.username}'s donation record.\n` +
         `They now have **£${donation.total}** in total donations.\n` +
         `💰 This donation credited **${tokensToCredit}** Hacksaw Tokens (unclaimed).`;
-
+                if (newlyCreditedCards.length > 0) {
+            const cardList = newlyCreditedCards.map(c => c.label).join(", ");
+            replyMsg += `\n🪪 Rank reward credited: **${cardList}** (claim in-game with **/claimrank**).`;
+        }
 
         if (pqGranted) {
             replyMsg += `\n✅ A one-month **priority queue** has been **granted**.`;

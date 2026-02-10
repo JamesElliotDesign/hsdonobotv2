@@ -2,7 +2,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
-const { payOutDonationRewards, payOutVoteRewards } = require('./services/claims');
+const { payOutDonationRewards, payOutVoteRewards, payOutRankCards } = require('./services/claims');
 const { sendServerMessage } = require('./services/cftoolsGameLabs');
 
 const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET;
@@ -61,10 +61,42 @@ function startCFToolsWebhookServer() {
       return res.status(204).end();
     }
 
+    // Normalize command
     const cmd = message.trim().toLowerCase();
 
+    // Clean helper: exact command matcher
+    const is = (...names) => names.includes(cmd);
+
     try {
-      if (cmd.startsWith('/claimvotes') || cmd.startsWith('!claimvote')) {
+
+      // ==========================
+      // Rank ID Card Claim
+      // ==========================
+      if (is('/claimrank', '!claimrank')) {
+        const result = await payOutRankCards(steamId64);
+        console.log(`🪪 claimrank result for ${steamId64}:`, result);
+
+        if (result.cardsPaid > 0) {
+          await sendServerMessage(
+            `${playerName || 'A player'} claimed: ${result.labels.join(', ')}`
+          );
+        } else {
+          let msg = `${playerName || 'You'} has no unclaimed Rank ID Cards at this time.`;
+
+          if (result.reason === 'no_steam_link') {
+            msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
+          } else if (result.reason === 'no_donation_record') {
+            msg = `${playerName || 'You'} does not have any recorded donations.`;
+          }
+
+          await sendServerMessage(msg);
+        }
+      }
+
+      // ==========================
+      // Vote Token Claim
+      // ==========================
+      if (is('/claimvote', '!claimvote', '/claimvotes', '!claimvotes')) {
         const result = await payOutVoteRewards(steamId64);
         console.log(`🎟 claimvotes result for ${steamId64}:`, result);
 
@@ -79,7 +111,10 @@ function startCFToolsWebhookServer() {
         }
       }
 
-      if (cmd.startsWith('/claimdono') || cmd.startsWith('!claimdonation')) {
+      // ==========================
+      // Donation Token Claim
+      // ==========================
+      if (is('/claimdono', '!claimdono', '/claimdonation', '!claimdonation')) {
         const result = await payOutDonationRewards(steamId64);
         console.log(`💰 claimdonation result for ${steamId64}:`, result);
 
@@ -89,18 +124,21 @@ function startCFToolsWebhookServer() {
           );
         } else {
           let msg = `${playerName || 'You'} has no unclaimed donation tokens.`;
+
           if (result.reason === 'no_steam_link') {
             msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
           } else if (result.reason === 'no_donation_record') {
             msg = `${playerName || 'You'} does not have any recorded donations.`;
           }
+
           await sendServerMessage(msg);
         }
       }
+
     } catch (err) {
       console.error('❌ Error running in-game claim:', err);
       await sendServerMessage(
-        `${playerName || 'A player'} attempted to claim tokens, but an error occurred. Please contact staff if this persists.`
+        `${playerName || 'A player'} attempted to claim rewards, but an error occurred. Please contact staff if this persists.`
       );
     }
 

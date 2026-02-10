@@ -19,11 +19,16 @@ const DonationSchema = new mongoose.Schema(
         pqExpiryAt: { type: Date },
         pqExpiryNotified: { type: Boolean, default: false },
 
-        // 💰 Hacksaw token balances
+        // Hacksaw token balances
         //  - unclaimedDonationTokens: tokens owed but not yet spawned in-game
         //  - claimedDonationTokens: total tokens already paid out
         unclaimedDonationTokens: { type: Number, required: true, default: 0 },
         claimedDonationTokens: { type: Number, required: true, default: 0 },
+                // Rank ID card claim tracking
+        //  - unclaimedRankCards: classnames owed but not yet spawned in-game
+        //  - claimedRankCards: classnames already claimed/spawned
+        unclaimedRankCards: { type: [String], default: [] },
+        claimedRankCards: { type: [String], default: [] },
 
         history: { type: [DonationHistorySchema], default: [] }
     },
