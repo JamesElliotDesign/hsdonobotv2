@@ -83,7 +83,7 @@ module.exports = {
         if (pqActivatedNow) {
             reply += `\n✅ They already had an active **priority queue** window, so this SteamID has been added to the CF Tools priority queue.`;
         } else {
-            reply += `\nℹ️ If they donate **£15 or more**, they will receive **1 month of priority queue**.`;
+            reply += `\nℹ️ If they donate **£20 or more**, they will receive **1 month of priority queue**.`;
         }
 
         return interaction.reply({
