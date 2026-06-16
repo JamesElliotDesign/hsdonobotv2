@@ -16,10 +16,9 @@ const path = require('path');
 const cron = require('node-cron');
 const weeklyBackup = require('./tasks/weeklyBackup');
 const pqExpiryCheck = require('./tasks/pqExpiryCheck');
+const topGamesVotePoller = require('./tasks/topGamesVotePoller');
 const { connectToDatabase } = require('./db');
 const { startCFToolsWebhookServer } = require('./cftoolsWebhookServer');
-const Vote = require('./models/Vote');
-const VOTES_CHANNEL_ID = '1283142509060427877';
 
 
 const client = new Client({
@@ -58,6 +57,18 @@ client.once('ready', async () => {
     });
     console.log("📆 Daily PQ expiry check cron job scheduled.");
 
+    // Poll Top-Games directly for linked SteamID votes every 10 minutes.
+    // This replaces relying on Top-Games' Discord webhook as the source of truth.
+    cron.schedule('*/10 * * * *', () => {
+        topGamesVotePoller(client);
+    });
+    console.log("📆 Top-Games vote API poller scheduled every 10 minutes.");
+
+    // Run once shortly after startup so votes are picked up without waiting 10 minutes.
+    setTimeout(() => {
+        topGamesVotePoller(client);
+    }, 30 * 1000);
+
     for (const file of commandFiles) {
         const filePath = path.join(commandsPath, file);
         const command = require(filePath);
@@ -89,67 +100,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.on('messageCreate', async (message) => {
-  try {
-    // Only care about the votes channel
-    if (message.channelId !== VOTES_CHANNEL_ID) return;
-
-    // Ignore non-bot senders if that channel is read-only anyway.
-    // If your votes come from a webhook / bot, this is safe:
-    if (!message.author.bot) return;
-
-    const content = (message.content || '').trim();
-    // Expected format: "7656119... just voted for your server!"
-    const match = content.match(/^(.+?) just voted for your server!?$/i);
-    if (!match) return;
-
-    const username = match[1].trim();
-
-    // We require players to use SteamID64 as username
-    const steamId64 = /^\d{17}$/.test(username) ? username : null;
-    if (!steamId64) {
-      console.log(
-        `[VOTE] Ignoring vote with non-Steam username "${username}" (content="${content}")`
-      );
-      return;
-    }
-
-    // Use the Discord message ID as providerVoteId to avoid duplicates
-    const providerVoteId = message.id;
-
-    // Optional: defensive de-duplication if the bot ever restarts and reprocesses somehow
-    const existing = await Vote.findOne({
-      provider: 'top-games',
-      providerVoteId,
-    });
-    if (existing) {
-      console.log(
-        `[VOTE] Duplicate vote message ignored for ${steamId64}, providerVoteId=${providerVoteId}`
-      );
-      return;
-    }
-
-    const voteDoc = new Vote({
-      provider: 'top-games',
-      providerVoteId,
-      steamId64,
-      discordId: null,
-      playerName: username,
-      votedAt: message.createdAt || new Date(),
-      rewardTokens: 10,
-      claimed: false,
-      claimSource: null,
-      rawResponse: { discordMessageId: message.id },
-    });
-
-    await voteDoc.save();
-    console.log(
-      `[VOTE] Recorded vote for SteamID ${steamId64} (+${voteDoc.rewardTokens} tokens)`
-    );
-  } catch (err) {
-    console.error('❌ Error processing vote webhook message:', err);
-  }
-});
+// Vote recording now happens via tasks/topGamesVotePoller.js, not by reading the Discord vote channel.
 
 (async () => {
   try {
