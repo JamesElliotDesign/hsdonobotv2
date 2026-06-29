@@ -25,6 +25,13 @@ module.exports = {
 
         const steamId = link.steamId64;
 
+        if (donation && donation.unlimitedPriorityQueue) {
+            return interaction.reply({
+                content: `✅ You have **unlimited Priority Queue** access linked to **${steamId}**.`,
+                ephemeral: true
+            });
+        }
+
         if (!donation || !donation.pqExpiryAt) {
             return interaction.reply({
                 content: `❌ You do not currently have priority queue access linked to **${steamId}**.`,

@@ -1,26 +1,8 @@
 // commands/linksteamplayer.js
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const path = require('path');
-const { execFile } = require('child_process');
 const SteamLink = require('../models/SteamLink');
 const Donation = require('../models/Donation');
-
-const ADD_PQ_SCRIPT = path.join(__dirname, '..', 'add-to-priority-queue.js');
-
-function addToPriorityQueue(steamId) {
-    return new Promise((resolve) => {
-        execFile('node', [ADD_PQ_SCRIPT, steamId], (error, stdout, stderr) => {
-            if (error) {
-                console.error(`❌ Error running PQ add script for ${steamId}: ${error.message}`);
-            } else {
-                console.log(`✅ PQ add script completed for ${steamId}`);
-                if (stdout) console.log(stdout);
-                if (stderr) console.error(stderr);
-            }
-            resolve();
-        });
-    });
-}
+const { addToPriorityQueue, isActiveTimedPriorityQueue } = require('../services/priorityQueue');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -65,14 +47,16 @@ module.exports = {
         }
         await link.save();
 
-        // If they already have active PQ, ensure they are in CF Tools PQ
+        // If they already have active or unlimited PQ, ensure they are in CF Tools PQ
         const donation = await Donation.findOne({ discordId: targetUser.id });
 
         let pqActivatedNow = false;
-        if (donation && donation.pqExpiryAt) {
-            const now = new Date();
-            const expiry = new Date(donation.pqExpiryAt);
-            if (expiry > now) {
+        let unlimitedPQ = false;
+
+        if (donation) {
+            unlimitedPQ = Boolean(donation.unlimitedPriorityQueue);
+
+            if (unlimitedPQ || isActiveTimedPriorityQueue(donation)) {
                 await addToPriorityQueue(steamId);
                 pqActivatedNow = true;
             }
@@ -80,10 +64,12 @@ module.exports = {
 
         let reply = `✅ Linked SteamID \`${steamId}\` to ${targetUser.tag}.`;
 
-        if (pqActivatedNow) {
-            reply += `\n✅ They already had an active **priority queue** window, so this SteamID has been added to the CF Tools priority queue.`;
+        if (pqActivatedNow && unlimitedPQ) {
+            reply += `\n✅ They already had **unlimited Priority Queue**, so this SteamID has been added to the CF Tools priority queue.`;
+        } else if (pqActivatedNow) {
+            reply += `\n✅ They already had an active **Priority Queue** window, so this SteamID has been added to the CF Tools priority queue.`;
         } else {
-            reply += `\nℹ️ If they donate **£20 or more**, they will receive **1 month of priority queue**.`;
+            reply += `\nℹ️ If they donate **£15 or more**, they will receive **1 month of Priority Queue**.`;
         }
 
         return interaction.reply({

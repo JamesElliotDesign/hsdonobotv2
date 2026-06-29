@@ -39,6 +39,7 @@ async function importDonations(data) {
                     total: doc.total || 0,
                     lastDonationAt: doc.lastDonationAt || doc.lastDonation || doc.lastDonationTime || undefined,
                     pqExpiryAt: doc.pqExpiryAt || undefined,
+                    unlimitedPriorityQueue: Boolean(doc.unlimitedPriorityQueue),
                     // keep any existing pqExpiryNotified/history if present
                 }
             },

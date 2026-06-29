@@ -1,11 +1,12 @@
 // commands/donate.js
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const path = require('path');
-const { execFile } = require('child_process');
 const Donation = require('../models/Donation');
 const SteamLink = require('../models/SteamLink');
-
-const ADD_PQ_SCRIPT = path.join(__dirname, '..', 'add-to-priority-queue.js');
+const {
+    addToPriorityQueue,
+    isActiveTimedPriorityQueue,
+    addYears
+} = require('../services/priorityQueue');
 
 // Donation roles thresholds (by total donated)
 const roles = [
@@ -17,6 +18,7 @@ const roles = [
     { id: "1345834598969643221", amount: 50 },
     { id: "1227025687316005015", amount: 20 }
 ];
+
 // Rank ID Cards thresholds (by TOTAL donated)
 const rankCards = [
     { amount: 2000, classname: "HS_RANKIDDIAMOND", label: "Diamond Rank ID Card" },
@@ -29,23 +31,18 @@ const rankCards = [
     { amount: 20, classname: "HS_RANKIDAMETHYST", label: "Amethyst Rank ID Card" },
 ];
 
+const RANK_PQ_PERKS = {
+    TURQUOISE: { amount: 500, label: 'Turquoise Rank' },
+    AQUAMARINE: { amount: 1000, label: 'Aquamarine Rank' },
+    DIAMOND: { amount: 2000, label: 'Diamond Rank' }
+};
+
 function getRoleForDonation(totalAmount) {
     return roles.find(role => totalAmount >= role.amount) || null;
 }
 
-function addToPriorityQueue(steamId) {
-    return new Promise((resolve) => {
-        execFile('node', [ADD_PQ_SCRIPT, steamId], (error, stdout, stderr) => {
-            if (error) {
-                console.error(`❌ Error running PQ add script for ${steamId}: ${error.message}`);
-            } else {
-                console.log(`✅ PQ add script completed for ${steamId}`);
-                if (stdout) console.log(stdout);
-                if (stderr) console.error(stderr);
-            }
-            resolve();
-        });
-    });
+function hasReachedRank(previousTotal, newTotal, rankAmount) {
+    return previousTotal < rankAmount && newTotal >= rankAmount;
 }
 
 module.exports = {
@@ -79,13 +76,13 @@ module.exports = {
             });
         }
 
-        // 🔐 NEW: require Steam link before processing the donation
+        // Require Steam link before processing the donation so PQ rewards can be applied immediately.
         const steamLink = await SteamLink.findOne({ discordId: user.id });
         if (!steamLink) {
             return interaction.reply({
                 content:
                     `❌ ${user.username} does not have a SteamID linked yet.\n` +
-                    `They must use **/linksteam \<steamid\>** before you can log a donation.`,
+                    `They must use **/linksteam <steamid>** before you can log a donation.`,
                 ephemeral: true
             });
         }
@@ -101,14 +98,17 @@ module.exports = {
             });
         }
 
+        const previousTotal = donation.total || 0;
+
         // Update donation info
-        donation.total += amount;
+        donation.total = previousTotal + amount;
         donation.lastDonationAt = now;
         donation.history.push({
             amount,
             at: now,
             addedBy: interaction.user.id
         });
+
         // Rank ID Cards: credit any newly-earned cards (claimable once)
         const alreadyUnclaimed = new Set(donation.unclaimedRankCards || []);
         const alreadyClaimed = new Set(donation.claimedRankCards || []);
@@ -128,13 +128,15 @@ module.exports = {
 
         let pqGranted = false;
         let pqExtended = false;
+        let turquoisePQGranted = false;
+        let turquoisePQExtended = false;
+        let unlimitedPQGrantedByRank = null;
+        let shouldEnsureCFToolsPQ = false;
 
-        // PQ logic: each donation >= 15 grants a month of PQ
-        if (amount >= 15) {
-            const nowMs = now.getTime();
+        // PQ logic: each donation >= 15 grants a month of timed PQ unless the user already has unlimited PQ.
+        if (amount >= 15 && !donation.unlimitedPriorityQueue) {
+            const hasActivePQ = isActiveTimedPriorityQueue(donation, now);
             const currentExpiry = donation.pqExpiryAt ? new Date(donation.pqExpiryAt) : null;
-            const hasActivePQ = currentExpiry && currentExpiry.getTime() > nowMs;
-
             const baseDate = hasActivePQ ? currentExpiry : now;
             const newExpiry = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
 
@@ -144,18 +146,52 @@ module.exports = {
             donation.pqExpiryAt = newExpiry;
             donation.pqExpiryNotified = false; // reset so they can be notified for the new expiry
 
-            // Only call ADD PQ script when newly granting PQ (not just extending)
             if (pqGranted) {
-                await addToPriorityQueue(steamLink.steamId64);
+                shouldEnsureCFToolsPQ = true;
             }
         }
 
-        // 💰 Donation token logic: 10 Hacksaw Tokens per £1 donated
+        // Donation-rank PQ perks.
+        // Turquoise grants at least 1 year of timed PQ from the rank-up date.
+        if (
+            hasReachedRank(previousTotal, donation.total, RANK_PQ_PERKS.TURQUOISE.amount) &&
+            !donation.unlimitedPriorityQueue
+        ) {
+            const oneYearExpiry = addYears(now, 1);
+            const currentExpiry = donation.pqExpiryAt ? new Date(donation.pqExpiryAt) : null;
+            const hadActivePQ = isActiveTimedPriorityQueue(donation, now);
+
+            if (!currentExpiry || currentExpiry.getTime() < oneYearExpiry.getTime()) {
+                donation.pqExpiryAt = oneYearExpiry;
+                donation.pqExpiryNotified = false;
+                turquoisePQGranted = !hadActivePQ;
+                turquoisePQExtended = hadActivePQ;
+            }
+
+            shouldEnsureCFToolsPQ = true;
+        }
+
+        // Aquamarine and Diamond grant unlimited PQ.
+        const reachedAquamarine = hasReachedRank(previousTotal, donation.total, RANK_PQ_PERKS.AQUAMARINE.amount);
+        const reachedDiamond = hasReachedRank(previousTotal, donation.total, RANK_PQ_PERKS.DIAMOND.amount);
+
+        if ((reachedAquamarine || reachedDiamond) && !donation.unlimitedPriorityQueue) {
+            donation.unlimitedPriorityQueue = true;
+            donation.pqExpiryNotified = false;
+            unlimitedPQGrantedByRank = reachedDiamond ? RANK_PQ_PERKS.DIAMOND.label : RANK_PQ_PERKS.AQUAMARINE.label;
+            shouldEnsureCFToolsPQ = true;
+        }
+
+        // Donation token logic: 100 Hacksaw Tokens per £1 donated
         const tokensToCredit = Math.floor(amount * 100);
         donation.unclaimedDonationTokens = (donation.unclaimedDonationTokens || 0) + tokensToCredit;
 
         // Save donation changes
         await donation.save();
+
+        if (shouldEnsureCFToolsPQ) {
+            await addToPriorityQueue(steamLink.steamId64);
+        }
 
         // Role handling based on TOTAL donations
         const roleToGive = getRoleForDonation(donation.total);
@@ -178,21 +214,27 @@ module.exports = {
 
         // Build reply message
         let replyMsg =
-        `✅ Added **£${amount}** to ${user.username}'s donation record.\n` +
-        `They now have **£${donation.total}** in total donations.\n` +
-        `💰 This donation credited **${tokensToCredit}** Hacksaw Tokens (unclaimed).`;
-                if (newlyCreditedCards.length > 0) {
+            `✅ Added **£${amount}** to ${user.username}'s donation record.\n` +
+            `They now have **£${donation.total}** in total donations.\n` +
+            `💰 This donation credited **${tokensToCredit}** Hacksaw Tokens (unclaimed).`;
+
+        if (newlyCreditedCards.length > 0) {
             const cardList = newlyCreditedCards.map(c => c.label).join(", ");
             replyMsg += `\n🪪 Rank reward credited: **${cardList}** (claim in-game with **/claimrank**).`;
         }
 
-        if (pqGranted) {
-            replyMsg += `\n✅ A one-month **priority queue** has been **granted**.`;
+        if (unlimitedPQGrantedByRank) {
+            replyMsg += `\n✅ **${unlimitedPQGrantedByRank}** reached: unlimited **Priority Queue** has been granted.`;
+        } else if (turquoisePQGranted) {
+            replyMsg += `\n✅ **Turquoise Rank** reached: **Priority Queue** has been granted for **1 year**.`;
+        } else if (turquoisePQExtended) {
+            replyMsg += `\n✅ **Turquoise Rank** reached: **Priority Queue** has been extended to at least **1 year from today**.`;
+        } else if (pqGranted) {
+            replyMsg += `\n✅ A one-month **Priority Queue** has been **granted**.`;
         } else if (pqExtended) {
-            replyMsg += `\n✅ Their **priority queue** has been **extended by one month**.`;
-        } else if (amount >= 15) {
-            // This case means: they donated >= 15 but for some reason PQ didn't change (e.g. logic change later)
-            replyMsg += `\nℹ️ This donation qualifies for **priority queue**, but no change was applied (already handled).`;
+            replyMsg += `\n✅ Their **Priority Queue** has been **extended by one month**.`;
+        } else if (amount >= 15 && donation.unlimitedPriorityQueue) {
+            replyMsg += `\nℹ️ They already have **unlimited Priority Queue**, so no timed PQ extension was needed.`;
         }
 
         await interaction.reply({ content: replyMsg });

@@ -56,6 +56,18 @@ const VoteSchema = new mongoose.Schema(
             index: true
         },
 
+        // New hardened claim state:
+        // - unclaimed: eligible to be claimed
+        // - processing: removed from claimable balance before CFTools is called
+        // - claimed: CFTools returned success and the reward is finalized
+        claimStatus: {
+            type: String,
+            enum: ['unclaimed', 'processing', 'claimed'],
+            required: true,
+            default: 'unclaimed',
+            index: true
+        },
+
         claimedAt: {
             type: Date
         },
@@ -67,7 +79,21 @@ const VoteSchema = new mongoose.Schema(
         },
 
         claimTxnId: {
-            type: String
+            type: String,
+            index: true
+        },
+
+        claimProcessingStartedAt: {
+            type: Date,
+            index: true
+        },
+
+        // Short-lived command lock used while in-game reward tokens are being spawned.
+        // This rejects rapid duplicate commands; claimStatus prevents stale processing
+        // rewards from becoming claimable again after the lock expires.
+        claimLockUntil: {
+            type: Date,
+            index: true
         },
 
         rawResponse: {
@@ -85,7 +111,10 @@ const VoteSchema = new mongoose.Schema(
 //     { unique: true, sparse: true }
 // );
 
-// Keep this one – it’s useful for queries
+// Keep these – they’re useful for queries
 VoteSchema.index({ steamId64: 1, claimed: 1 });
+VoteSchema.index({ steamId64: 1, claimStatus: 1 });
+VoteSchema.index({ steamId64: 1, claimed: 1, claimLockUntil: 1 });
+VoteSchema.index({ steamId64: 1, claimStatus: 1, claimProcessingStartedAt: 1 });
 
 module.exports = mongoose.model('Vote', VoteSchema);

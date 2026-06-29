@@ -1,26 +1,8 @@
 // commands/rebuildpq.js
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const path = require('path');
-const { execFile } = require('child_process');
 const Donation = require('../models/Donation');
 const SteamLink = require('../models/SteamLink');
-
-const ADD_PQ_SCRIPT = path.join(__dirname, '..', 'add-to-priority-queue.js');
-
-function addToPriorityQueue(steamId) {
-    return new Promise((resolve) => {
-        execFile('node', [ADD_PQ_SCRIPT, steamId], (error, stdout, stderr) => {
-            if (error) {
-                console.error(`❌ Error running PQ add script for ${steamId}: ${error.message}`);
-            } else {
-                console.log(`✅ PQ add script completed for ${steamId}`);
-                if (stdout) console.log(stdout);
-                if (stderr) console.error(stderr);
-            }
-            resolve(error);
-        });
-    });
-}
+const { addToPriorityQueue } = require('../services/priorityQueue');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -41,18 +23,29 @@ module.exports = {
         const now = new Date();
 
         const activeDonations = await Donation.find({
-            pqExpiryAt: { $gt: now }
+            $or: [
+                { unlimitedPriorityQueue: true },
+                { pqExpiryAt: { $gt: now } }
+            ]
         }).lean();
 
         if (!activeDonations.length) {
-            return interaction.editReply('ℹ️ No users currently have active Priority Queue access in the database.');
+            return interaction.editReply('ℹ️ No users currently have active or unlimited Priority Queue access in the database.');
         }
 
         let added = 0;
         const failed = [];
         let missingSteam = 0;
+        let unlimitedCount = 0;
+        let timedCount = 0;
 
         for (const donation of activeDonations) {
+            if (donation.unlimitedPriorityQueue) {
+                unlimitedCount++;
+            } else {
+                timedCount++;
+            }
+
             const link = await SteamLink.findOne({ discordId: donation.discordId }).lean();
 
             if (!link) {
@@ -71,9 +64,10 @@ module.exports = {
         }
 
         let result = `✅ Rebuild complete. Added **${added}** users to the priority queue.`;
+        result += `\nℹ️ Source records: **${timedCount}** timed PQ, **${unlimitedCount}** unlimited PQ.`;
 
         if (missingSteam > 0) {
-            result += `\nℹ️ Skipped **${missingSteam}** users with active PQ but no linked SteamID.`;
+            result += `\nℹ️ Skipped **${missingSteam}** users with PQ access but no linked SteamID.`;
         }
 
         if (failed.length > 0) {

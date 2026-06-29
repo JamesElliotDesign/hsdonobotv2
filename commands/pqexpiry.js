@@ -17,6 +17,13 @@ module.exports = {
 
         const donation = await Donation.findOne({ discordId });
 
+        if (donation && donation.unlimitedPriorityQueue) {
+            return interaction.reply({
+                content: '✅ Your **Priority Queue** access is **unlimited** and does not expire.',
+                ephemeral: true
+            });
+        }
+
         if (!donation || !donation.pqExpiryAt) {
             return interaction.reply({
                 content: '❌ You do not currently have **Priority Queue** access.',

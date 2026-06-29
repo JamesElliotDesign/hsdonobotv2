@@ -1,17 +1,17 @@
 // tasks/pqExpiryCheck.js
-const { execFile } = require('child_process');
 const Donation = require('../models/Donation');
 const SteamLink = require('../models/SteamLink');
+const { removeFromPriorityQueue } = require('../services/priorityQueue');
 
-const REMOVE_PQ_SCRIPT = require('path').join(__dirname, '..', 'remove-from-priority-queue.js');
 const EXPIRED_CHANNEL_ID = '1400136473281429534'; // #expired-pq
 
 module.exports = async function pqExpiryCheck(client) {
     const now = new Date();
 
-    // Fetch all users whose PQ has expired (pqExpiryAt in past)
+    // Fetch all users whose timed PQ has expired, excluding unlimited PQ users.
     const expiredDonations = await Donation.find({
-        pqExpiryAt: { $lte: now }
+        pqExpiryAt: { $lte: now },
+        unlimitedPriorityQueue: { $ne: true }
     }).lean(); // we’ll update by id later
 
     if (!expiredDonations.length) {
@@ -25,9 +25,16 @@ module.exports = async function pqExpiryCheck(client) {
     }
 
     let removedCount = 0;
+    let skippedUnlimitedCount = 0;
 
     for (const donation of expiredDonations) {
         const { discordId, pqExpiryNotified } = donation;
+
+        // Safety guard in case an old query result or concurrent update grants unlimited PQ mid-sweep.
+        if (donation.unlimitedPriorityQueue) {
+            skippedUnlimitedCount++;
+            continue;
+        }
 
         // Find linked SteamID
         const link = await SteamLink.findOne({ discordId }).lean();
@@ -44,18 +51,7 @@ module.exports = async function pqExpiryCheck(client) {
         const steamId = link.steamId64;
 
         // Remove from CF Tools priority queue
-        await new Promise((resolve) => {
-            execFile('node', [REMOVE_PQ_SCRIPT, steamId], (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`❌ Error running PQ remove script for ${steamId}: ${error.message}`);
-                } else {
-                    console.log(`✅ PQ removed for SteamID ${steamId}`);
-                    if (stdout) console.log(stdout);
-                    if (stderr) console.error(stderr);
-                }
-                resolve();
-            });
-        });
+        await removeFromPriorityQueue(steamId);
 
         // Only send the Discord reminder once per expiry
         if (!pqExpiryNotified && channel) {
@@ -74,5 +70,5 @@ module.exports = async function pqExpiryCheck(client) {
         removedCount++;
     }
 
-    console.log(`🔁 PQ Expiry Sweep complete. Removed ${removedCount} users.`);
+    console.log(`🔁 PQ Expiry Sweep complete. Removed ${removedCount} users. Skipped ${skippedUnlimitedCount} unlimited PQ users.`);
 };

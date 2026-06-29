@@ -83,7 +83,11 @@ function startCFToolsWebhookServer() {
         } else {
           let msg = `${playerName || 'You'} has no unclaimed Rank ID Cards at this time.`;
 
-          if (result.reason === 'no_steam_link') {
+          if (result.reason === 'claim_in_progress') {
+            msg = `${playerName || 'Your'} Rank ID Card claim is already being processed. Please wait a moment.`;
+          } else if (result.reason === 'claim_pending_review') {
+            msg = `${playerName || 'Your'} Rank ID Card claim is pending staff review. Please contact staff.`;
+          } else if (result.reason === 'no_steam_link') {
             msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
           } else if (result.reason === 'no_donation_record') {
             msg = `${playerName || 'You'} does not have any recorded donations.`;
@@ -105,9 +109,15 @@ function startCFToolsWebhookServer() {
             `${playerName || 'A player'} claimed ${result.tokensPaid} Reward Tokens from their votes!`
           );
         } else {
-          await sendServerMessage(
-            `${playerName || 'You'} has no unclaimed Reward Tokens at this time.`
-          );
+          let msg = `${playerName || 'You'} has no unclaimed Reward Tokens at this time.`;
+
+          if (result.reason === 'claim_in_progress') {
+            msg = `${playerName || 'Your'} Reward Token claim is already being processed. Please wait a moment.`;
+          } else if (result.reason === 'claim_pending_review') {
+            msg = `${playerName || 'Your'} Reward Token claim is pending staff review. Please contact staff.`;
+          }
+
+          await sendServerMessage(msg);
         }
       }
 
@@ -125,7 +135,11 @@ function startCFToolsWebhookServer() {
         } else {
           let msg = `${playerName || 'You'} has no unclaimed donation tokens.`;
 
-          if (result.reason === 'no_steam_link') {
+          if (result.reason === 'claim_in_progress') {
+            msg = `${playerName || 'Your'} donation token claim is already being processed. Please wait a moment.`;
+          } else if (result.reason === 'claim_pending_review') {
+            msg = `${playerName || 'Your'} donation token claim is pending staff review. Please contact staff.`;
+          } else if (result.reason === 'no_steam_link') {
             msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
           } else if (result.reason === 'no_donation_record') {
             msg = `${playerName || 'You'} does not have any recorded donations.`;
@@ -138,7 +152,7 @@ function startCFToolsWebhookServer() {
     } catch (err) {
       console.error('❌ Error running in-game claim:', err);
       await sendServerMessage(
-        `${playerName || 'A player'} attempted to claim rewards, but an error occurred. Please contact staff if this persists.`
+        `${playerName || 'A player'} attempted to claim rewards, but an error occurred. If this claim is now pending staff review, staff can use /resolveclaim.`
       );
     }
 

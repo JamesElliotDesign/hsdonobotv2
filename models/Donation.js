@@ -18,13 +18,33 @@ const DonationSchema = new mongoose.Schema(
         lastDonationAt: { type: Date },
         pqExpiryAt: { type: Date },
         pqExpiryNotified: { type: Boolean, default: false },
+        unlimitedPriorityQueue: { type: Boolean, required: true, default: false, index: true },
+
+        // Short-lived in-game claim locks. These reject rapid duplicate commands
+        // while the original command is still being handled.
+        donationClaimLockId: { type: String },
+        donationClaimLockUntil: { type: Date, index: true },
+        rankClaimLockId: { type: String },
+        rankClaimLockUntil: { type: Date, index: true },
+
+        // Recoverable processing/spent states.
+        // Tokens/cards are moved here before CFTools is called, so a bot crash
+        // after CFTools accepts the spawn cannot expose the same rewards as
+        // unclaimed again. Staff can later release or finalize these manually.
+        donationClaimProcessingId: { type: String, index: true },
+        donationClaimProcessingTokens: { type: Number, required: true, default: 0, min: 0 },
+        donationClaimProcessingStartedAt: { type: Date, index: true },
+        rankClaimProcessingId: { type: String, index: true },
+        rankClaimProcessingCards: { type: [String], default: [] },
+        rankClaimProcessingStartedAt: { type: Date, index: true },
 
         // Hacksaw token balances
         //  - unclaimedDonationTokens: tokens owed but not yet spawned in-game
         //  - claimedDonationTokens: total tokens already paid out
-        unclaimedDonationTokens: { type: Number, required: true, default: 0 },
-        claimedDonationTokens: { type: Number, required: true, default: 0 },
-                // Rank ID card claim tracking
+        unclaimedDonationTokens: { type: Number, required: true, default: 0, min: 0 },
+        claimedDonationTokens: { type: Number, required: true, default: 0, min: 0 },
+
+        // Rank ID card claim tracking
         //  - unclaimedRankCards: classnames owed but not yet spawned in-game
         //  - claimedRankCards: classnames already claimed/spawned
         unclaimedRankCards: { type: [String], default: [] },
@@ -34,5 +54,10 @@ const DonationSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+DonationSchema.index({ discordId: 1, donationClaimLockUntil: 1 });
+DonationSchema.index({ discordId: 1, rankClaimLockUntil: 1 });
+DonationSchema.index({ discordId: 1, donationClaimProcessingStartedAt: 1 });
+DonationSchema.index({ discordId: 1, rankClaimProcessingStartedAt: 1 });
 
 module.exports = mongoose.model('Donation', DonationSchema);

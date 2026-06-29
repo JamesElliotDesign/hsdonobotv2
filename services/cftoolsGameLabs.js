@@ -71,6 +71,10 @@ async function spawnItemOnPlayer(steam64, itemClassname, quantity, stacked = tru
     }
   );
 
+  if (response.status !== 204) {
+    throw new Error(`Unexpected CFTools GameLabs spawn response status: ${response.status}`);
+  }
+
   return response.data;
 }
 
