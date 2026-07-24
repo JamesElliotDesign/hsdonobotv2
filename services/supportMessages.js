@@ -115,7 +115,7 @@ function buildCompletedSupportMessage(order) {
       },
       {
         name: 'Claiming rewards',
-        value: `Please read [Claiming Votes and Donos](${CLAIM_CHANNEL_URL}).`,
+        value: `Please read [claiming vote and support tokens](${CLAIM_CHANNEL_URL}).`,
       },
       {
         name: 'Record',
