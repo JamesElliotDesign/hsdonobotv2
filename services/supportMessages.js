@@ -9,6 +9,7 @@ const {
   SUPPORT_TERMS_URL,
   formatGBP,
 } = require('../config/supportProgram');
+const { describePriorityQueue } = require('./supportText');
 
 function discordTimestamp(date, style = 'F') {
   if (!date) return 'Not applicable';
@@ -19,21 +20,6 @@ function safeInlineCode(value) {
   return String(value ?? '').replace(/[\r\n]+/g, ' ').replace(/`/g, 'ˋ');
 }
 
-function describePriorityQueue(pq) {
-  switch (pq?.kind) {
-    case 'thirty_days':
-      return '30 days of Priority Queue';
-    case 'one_year':
-      return 'Priority Queue extended to at least 1 year';
-    case 'lifetime':
-      return 'Lifetime Priority Queue';
-    case 'already_unlimited':
-      return null;
-    default:
-      return null;
-  }
-}
-
 function rankCardText(cards) {
   if (!Array.isArray(cards) || cards.length === 0) return 'None unlocked';
   return cards.map((card) => card.label).join('\n');
@@ -42,11 +28,9 @@ function rankCardText(cards) {
 function buildPendingSupportMessage(order) {
   const benefits = [
     `**${Number(order.expectedTokens || 0).toLocaleString('en-GB')}** Hacksaw Tokens`,
+    `**Priority Queue:** ${describePriorityQueue(order.expectedPriorityQueue, 'pending')}`,
     `**${formatGBP(order.amountPence)}** added to your Lifetime Support Total`,
   ];
-
-  const pqText = describePriorityQueue(order.expectedPriorityQueue);
-  if (pqText) benefits.splice(1, 0, `**${pqText}**`);
 
   const embed = new EmbedBuilder()
     .setTitle('Confirm your support')
@@ -99,15 +83,13 @@ function buildPendingSupportMessage(order) {
 function buildCompletedSupportMessage(order) {
   const added = [
     `**${Number(order.tokensCredited || 0).toLocaleString('en-GB')}** Hacksaw Tokens`,
+    `**Priority Queue:** ${describePriorityQueue(order.priorityQueueBenefit, 'completed')}`,
     `**${formatGBP(order.amountPence)}** added to your Lifetime Support Total`,
   ];
 
-  const pqText = describePriorityQueue(order.priorityQueueBenefit);
-  if (pqText) added.splice(1, 0, `**${pqText}**`);
-
   const attention = order.status === 'fulfilment_attention_required';
   const embed = new EmbedBuilder()
-    .setTitle(attention ? 'Support confirmed — staff action required' : 'Support confirmed')
+    .setTitle(attention ? 'Support confirmed — staff action required' : 'Support confirmed!')
     .setDescription(
       `Thank you for supporting Hacksaw.\n\n` +
       `**Order:** \`${order.orderId}\`\n` +
@@ -133,14 +115,14 @@ function buildCompletedSupportMessage(order) {
       },
       {
         name: 'Claiming rewards',
-        value: `Claim available Hacksaw Tokens and Rank ID Cards in [Claiming Votes and Donos](${CLAIM_CHANNEL_URL}).`,
+        value: `Please read [Claiming Votes and Donos](${CLAIM_CHANNEL_URL}).`,
       },
       {
         name: 'Record',
         value:
           `**Terms accepted:** Version \`${order.termsVersion}\`\n` +
           `**Confirmed:** ${discordTimestamp(order.acceptedAt)}\n` +
-          `Keep the Order ID if you need help with this support purchase.`,
+          `Keep the Order ID for reference.`,
       }
     );
 

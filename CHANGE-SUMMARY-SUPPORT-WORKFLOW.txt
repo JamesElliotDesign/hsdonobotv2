@@ -43,3 +43,13 @@ SAFETY / CONSISTENCY
 DEPLOYMENT
 - Read README-DEPLOYMENT.md for detailed Atlas snapshot, mongodump, Windows deployment,
   staging, smoke-test, verification and rollback instructions.
+
+PQ DISPLAY AND RECEIPT POLISH UPDATE
+- Pending and completed support messages now always state the exact Priority Queue outcome.
+- Lifetime PQ is shown as already active even when an individual support purchase is below £20.
+- Preserves the revised confirmation/completion wording supplied by Hacksaw staff.
+- Evidence PDF now uses readable Priority Queue descriptions instead of internal enum values.
+- Evidence PDF uses unambiguous ASCII currency text (for example GBP 20.00), fixing unsupported £ glyphs.
+- Evidence PDF now has bold section headings, page numbers, labelled PQ before/after status,
+  mapped Rank ID Card names, and a concise human-readable audit timeline.
+- The full machine-readable terms snapshot and complete audit data remain in the signed JSON receipt.

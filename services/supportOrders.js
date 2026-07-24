@@ -59,7 +59,7 @@ function calculatePriorityQueueBenefit(donation, previousTotalPence, newTotalPen
 
   if (unlimitedBefore) {
     return {
-      kind: amountPence >= MONTHLY_PQ_MINIMUM_PENCE ? 'already_unlimited' : 'none',
+      kind: 'already_unlimited',
       daysAdded: 0,
       expiryBefore,
       expiryAfter: expiryBefore,
@@ -245,6 +245,32 @@ async function createPendingSupportOrder({ guildId, channelId, staffUser, player
       termsSnapshotSource: terms.source,
     },
   });
+
+  return order;
+}
+
+
+async function cancelSupportOrderAfterPostFailure({ orderId, staffDiscordId, error }) {
+  const order = await SupportOrder.findOneAndUpdate(
+    { orderId, status: 'pending_player_confirmation' },
+    { $set: { status: 'cancelled' } },
+    { new: true }
+  );
+
+  if (order) {
+    await safeRecordSupportEvent({
+      orderId,
+      discordId: order.discordId,
+      eventType: 'confirmation_message_post_failed',
+      actorType: 'system',
+      actorDiscordId: staffDiscordId,
+      data: {
+        channelId: order.channelId,
+        errorCode: error?.code || error?.rawError?.code || undefined,
+        errorMessage: error?.message || String(error || 'Unknown Discord error'),
+      },
+    });
+  }
 
   return order;
 }
@@ -727,4 +753,5 @@ module.exports = {
   calculateBenefits,
   normalizePaymentReference,
   retrySupportOrder,
+  cancelSupportOrderAfterPostFailure,
 };

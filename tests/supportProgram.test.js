@@ -2,7 +2,12 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const support = require('../config/supportProgram');
-const { createTextPdf } = require('../services/simplePdf');
+const { createTextPdf, sanitizePdfText } = require('../services/simplePdf');
+const {
+  describePriorityQueue,
+  formatReceiptMoney,
+  priorityQueueReceiptDescription,
+} = require('../services/supportText');
 const { normalizePlayerName } = require('../utils/playerNames');
 
 assert.strictEqual(support.poundsToPence(20), 2000);
@@ -17,6 +22,22 @@ assert.deepStrictEqual(
   support.getCrossedRanks(4000, 11000).map((rank) => rank.key),
   ['JADE', 'AMBER']
 );
+
+assert.strictEqual(
+  describePriorityQueue({ kind: 'thirty_days' }, 'pending'),
+  '30 days of Priority Queue will be added'
+);
+assert.strictEqual(
+  describePriorityQueue({ kind: 'already_unlimited' }, 'pending'),
+  'Lifetime Priority Queue is already active'
+);
+assert.strictEqual(
+  describePriorityQueue({ kind: 'none' }, 'pending'),
+  'No Priority Queue included for an individual purchase below £20'
+);
+assert.strictEqual(formatReceiptMoney(2000), 'GBP 20.00');
+assert.strictEqual(priorityQueueReceiptDescription({ kind: 'already_unlimited' }), 'Lifetime Priority Queue was already active');
+assert.strictEqual(sanitizePdfText("£20 – player's"), "GBP 20 - player's");
 assert.deepStrictEqual(
   support.getCardsToCredit(
     { unclaimedRankCards: ['HS_RANKIDAMETHYST'], claimedRankCards: [] },
