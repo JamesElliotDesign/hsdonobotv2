@@ -1,0 +1,45 @@
+HACKSAW DONATOR BOT - STAGED SUPPORT AND PLAYER LOOKUP
+
+PLAYER FLOW
+- Staff command: /donate player amount reference
+- Staff enters a verified payment reference; no payment-method field is required.
+- The named player reviews one concise "Confirm your support" message.
+- The message shows amount, reference, Steam ID, tokens, PQ benefit, previous/new total,
+  current rank and newly credited Rank ID Cards.
+- Confirming records the website Support Terms version/snapshot and fulfils the purchase.
+- The completion message links to the Claiming Votes and Donos channel.
+
+PLAYER LOOKUP
+- New admin command: /playerinfo
+- Lookup options: player mention, stored name, Discord ID, Steam ID64 or exact payment reference.
+- Shows Discord ID, Steam ID, server membership status, known name aliases, support totals,
+  token/card balances, PQ status, recent Order IDs and legacy-history count.
+- Reference lookup highlights the matching Order ID and works after a player leaves Discord.
+- Attaches a text file with the complete Order ID list and any reference match.
+- New playerprofiles collection stores name snapshots without altering legacy collections.
+- Current name snapshots are saved when players link Steam, are selected for /donate, or are
+  looked up. Existing support-order usernames are backfilled safely at startup.
+
+EVIDENCE RECORDS
+- supportorders: one record per support purchase.
+- supportevents: append-only acceptance, fulfilment, PQ, role and claim events.
+- playerprofiles: Discord username/global-name/display-name snapshots and aliases.
+- Existing Donation and SteamLink collections remain in use and are not migrated or deleted.
+
+STAFF COMMANDS
+- /playerinfo player|name|discord_id|steam_id|reference finds player details and Order IDs.
+- /supportreceipt order:<id> creates a PDF and JSON evidence receipt.
+- /supportretry order:<id> safely retries interrupted external fulfilment actions.
+
+SAFETY / CONSISTENCY
+- Amethyst and monthly PQ threshold are consistently GBP 20.
+- Diamond role default is 1359232541965422662.
+- Amounts in support orders are stored as integer pence.
+- Duplicate payment references are blocked unless the earlier order was cancelled/corrected.
+- Player confirmation is restricted to the Discord ID named in the order.
+- Core fulfilment uses MongoDB transactions when available, with idempotent fallback guards.
+- Weekly backups read MongoDB and include all collections.
+
+DEPLOYMENT
+- Read README-DEPLOYMENT.md for detailed Atlas snapshot, mongodump, Windows deployment,
+  staging, smoke-test, verification and rollback instructions.

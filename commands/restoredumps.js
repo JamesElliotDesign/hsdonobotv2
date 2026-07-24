@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 const Donation = require('../models/Donation');
 const SteamLink = require('../models/SteamLink');
 
-const BACKUP_CHANNEL_ID = '1382491124656111626';
+const BACKUP_CHANNEL_ID = process.env.BACKUP_CHANNEL_ID || '1382491124656111626';
 
 async function downloadJsonFromAttachment(attachment, label) {
     const res = await fetch(attachment.url);
@@ -15,13 +15,11 @@ async function downloadJsonFromAttachment(attachment, label) {
 }
 
 async function importDonations(data) {
-    // Support both array format and old object format just in case
     let docs = [];
 
     if (Array.isArray(data)) {
         docs = data;
     } else if (typeof data === 'object' && data !== null) {
-        // old style: { discordId: {total, ...}, ... }
         docs = Object.entries(data).map(([discordId, val]) => ({
             discordId,
             total: val.total || 0,
@@ -32,17 +30,12 @@ async function importDonations(data) {
     for (const doc of docs) {
         if (!doc.discordId) continue;
 
+        // Restore every backed-up field except MongoDB's immutable metadata.
+        // This retains token balances, cards, history, PQ state and claim locks.
+        const { _id, __v, ...restorable } = doc;
         await Donation.updateOne(
             { discordId: doc.discordId },
-            {
-                $set: {
-                    total: doc.total || 0,
-                    lastDonationAt: doc.lastDonationAt || doc.lastDonation || doc.lastDonationTime || undefined,
-                    pqExpiryAt: doc.pqExpiryAt || undefined,
-                    unlimitedPriorityQueue: Boolean(doc.unlimitedPriorityQueue),
-                    // keep any existing pqExpiryNotified/history if present
-                }
-            },
+            { $set: restorable },
             { upsert: true }
         );
     }
@@ -75,7 +68,7 @@ async function importSteamLinks(data) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('restoredumps')
-        .setDescription('Restore donation and Steam link data from the latest backup .txt files in the backup channel.')
+        .setDescription('Restore support and Steam link data from the latest compatible backup files.')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     async execute(interaction) {

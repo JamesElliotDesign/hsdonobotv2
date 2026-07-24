@@ -6,7 +6,11 @@ const DonationHistorySchema = new mongoose.Schema(
         amount: { type: Number, required: true },
         at: { type: Date, required: true, default: Date.now },
         addedBy: { type: String }, // Discord ID of staff / bot user, optional
-        note: { type: String }
+        note: { type: String },
+        orderId: { type: String },
+        paymentReference: { type: String },
+        termsVersion: { type: String },
+        entryType: { type: String }
     },
     { _id: false }
 );

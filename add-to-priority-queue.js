@@ -11,6 +11,7 @@ const { CFToolsClientBuilder, SteamId64 } = require("cftools-sdk");
 
   if (!appId || !secret || !serverApiId || !steamId) {
     console.error("FATAL: Missing required inputs (env vars or SteamID).");
+    process.exitCode = 1;
     return;
   }
 
@@ -34,5 +35,6 @@ const { CFToolsClientBuilder, SteamId64 } = require("cftools-sdk");
   } catch (err) {
     console.error("❌ ERROR:");
     console.error(err);
+    process.exitCode = 1;
   }
 })();

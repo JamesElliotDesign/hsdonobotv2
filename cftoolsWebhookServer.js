@@ -90,7 +90,7 @@ function startCFToolsWebhookServer() {
           } else if (result.reason === 'no_steam_link') {
             msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
           } else if (result.reason === 'no_donation_record') {
-            msg = `${playerName || 'You'} does not have any recorded donations.`;
+            msg = `${playerName || 'You'} does not have any recorded support.`;
           }
 
           await sendServerMessage(msg);
@@ -130,19 +130,19 @@ function startCFToolsWebhookServer() {
 
         if (result.tokensPaid > 0) {
           await sendServerMessage(
-            `${playerName || 'A player'} claimed ${result.tokensPaid} Hacksaw Tokens from their donations!`
+            `${playerName || 'A player'} claimed ${result.tokensPaid} Hacksaw Tokens from their support balance!`
           );
         } else {
-          let msg = `${playerName || 'You'} has no unclaimed donation tokens.`;
+          let msg = `${playerName || 'You'} has no unclaimed Hacksaw Tokens.`;
 
           if (result.reason === 'claim_in_progress') {
-            msg = `${playerName || 'Your'} donation token claim is already being processed. Please wait a moment.`;
+            msg = `${playerName || 'Your'} Hacksaw Token claim is already being processed. Please wait a moment.`;
           } else if (result.reason === 'claim_pending_review') {
-            msg = `${playerName || 'Your'} donation token claim is pending staff review. Please contact staff.`;
+            msg = `${playerName || 'Your'} Hacksaw Token claim is pending staff review. Please contact staff.`;
           } else if (result.reason === 'no_steam_link') {
             msg = `${playerName || 'You'} does not have a donation account linked to this SteamID.`;
           } else if (result.reason === 'no_donation_record') {
-            msg = `${playerName || 'You'} does not have any recorded donations.`;
+            msg = `${playerName || 'You'} does not have any recorded support.`;
           }
 
           await sendServerMessage(msg);

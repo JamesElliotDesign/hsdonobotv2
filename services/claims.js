@@ -5,6 +5,7 @@ const Donation = require('../models/Donation');
 const SteamLink = require('../models/SteamLink');
 const { spawnItemOnPlayer } = require('./cftoolsGameLabs');
 const { acquireClaimLock, releaseClaimLock } = require('./claimLocks');
+const { safeRecordSupportEvent } = require('./supportAudit');
 
 // Classnames
 const DONATION_TOKEN_CLASS = 'HackSaw_Dono_Coin';      // Hacksaw Tokens
@@ -409,6 +410,22 @@ async function payOutDonationRewards(steamId64) {
       return { tokensPaid: reservedAmount, reason: 'finalize_pending_review' };
     }
 
+    const donationAfterClaim = await Donation.findById(donation._id).lean();
+    await safeRecordSupportEvent({
+      discordId: link.discordId,
+      eventType: 'donation_tokens_claimed',
+      actorType: 'player',
+      actorDiscordId: link.discordId,
+      data: {
+        claimId,
+        steamId64,
+        tokensClaimed: reservedAmount,
+        totalClaimedAfter: donationAfterClaim?.claimedDonationTokens || reservedAmount,
+        unclaimedBalanceAfter: donationAfterClaim?.unclaimedDonationTokens || 0,
+        attribution: 'account_level_cumulative_balance',
+      },
+    });
+
     return {
       tokensPaid: reservedAmount,
       reason: 'ok',
@@ -572,6 +589,22 @@ async function payOutRankCards(steamId64) {
         labels: paid.map((cn) => RANK_CARD_LABELS[cn] || cn),
       };
     }
+
+    const donationAfterClaim = await Donation.findById(donation._id).lean();
+    await safeRecordSupportEvent({
+      discordId: link.discordId,
+      eventType: 'rank_cards_claimed',
+      actorType: 'player',
+      actorDiscordId: link.discordId,
+      data: {
+        claimId,
+        steamId64,
+        cardClassnames: paid,
+        cardLabels: paid.map((cn) => RANK_CARD_LABELS[cn] || cn),
+        claimedCardsAfter: donationAfterClaim?.claimedRankCards || paid,
+        attribution: 'account_level_cumulative_balance',
+      },
+    });
 
     return {
       cardsPaid: paid.length,

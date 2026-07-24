@@ -19,6 +19,8 @@ const pqExpiryCheck = require('./tasks/pqExpiryCheck');
 const topGamesVotePoller = require('./tasks/topGamesVotePoller');
 const { connectToDatabase } = require('./db');
 const { startCFToolsWebhookServer } = require('./cftoolsWebhookServer');
+const { handleSupportButton } = require('./services/supportInteractions');
+const { backfillProfilesFromSupportOrders } = require('./services/playerProfiles');
 
 
 const client = new Client({
@@ -42,6 +44,15 @@ client.once('ready', async () => {
     console.log(`${client.user.tag} is online!`);
 
     const guild = client.guilds.cache.first(); // Replace with your guild ID if needed
+
+    try {
+        const profileCount = await backfillProfilesFromSupportOrders();
+        if (profileCount > 0) {
+            console.log(`✅ Refreshed ${profileCount} stored player name profile(s) from support orders.`);
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not backfill player name profiles:', error.message);
+    }
 
     const commandsPath = path.join(__dirname, 'commands');
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -84,19 +95,30 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-
-    if (!command) {
-        return interaction.reply({ content: '❌ Command not found.', ephemeral: true });
-    }
-
     try {
+        if (interaction.isButton() && interaction.customId.startsWith('support_')) {
+            await handleSupportButton(interaction);
+            return;
+        }
+
+        if (!interaction.isChatInputCommand()) return;
+
+        const command = client.commands.get(interaction.commandName);
+
+        if (!command) {
+            return interaction.reply({ content: '❌ Command not found.', ephemeral: true });
+        }
+
         await command.execute(interaction);
     } catch (error) {
         console.error(error);
-        await interaction.reply({ content: '⚠️ There was an error executing that command.', ephemeral: true });
+        const response = { content: '⚠️ There was an error executing that interaction.', ephemeral: true };
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply(response).catch(() => null);
+        } else {
+            await interaction.reply(response).catch(() => null);
+        }
     }
 });
 

@@ -3,6 +3,7 @@ const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const SteamLink = require('../models/SteamLink');
 const Donation = require('../models/Donation');
 const { addToPriorityQueue, isActiveTimedPriorityQueue } = require('../services/priorityQueue');
+const { snapshotPlayerIdentity } = require('../services/playerProfiles');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -47,6 +48,12 @@ module.exports = {
         }
         await link.save();
 
+        await snapshotPlayerIdentity({
+            user: targetUser,
+            member: interaction.options.getMember('player'),
+            source: 'linksteamplayer',
+        }).catch((error) => console.warn('⚠️ Could not update player name snapshot:', error.message));
+
         // If they already have active or unlimited PQ, ensure they are in CF Tools PQ
         const donation = await Donation.findOne({ discordId: targetUser.id });
 
@@ -69,7 +76,7 @@ module.exports = {
         } else if (pqActivatedNow) {
             reply += `\n✅ They already had an active **Priority Queue** window, so this SteamID has been added to the CF Tools priority queue.`;
         } else {
-            reply += `\nℹ️ If they donate **£15 or more**, they will receive **1 month of Priority Queue**.`;
+            reply += `\nℹ️ If they make a support purchase of **£20 or more**, they will receive **1 month of Priority Queue**.`;
         }
 
         return interaction.reply({
