@@ -7,7 +7,7 @@ const { recordSupportEvent, safeRecordSupportEvent } = require('./supportAudit')
 const { captureTermsSnapshot, sha256 } = require('./termsSnapshot');
 const { snapshotPlayerIdentity } = require('./playerProfiles');
 const {
-  addToPriorityQueue,
+  addToPriorityQueueDetailed,
   isActiveTimedPriorityQueue,
   addYears,
 } = require('./priorityQueue');
@@ -561,12 +561,22 @@ async function updateDiscordRole(guild, discordId, totalPence) {
 async function completeExternalFulfilment(order, guild, shouldSyncPriorityQueue) {
   const roleResult = await updateDiscordRole(guild, order.discordId, order.fulfilledTotalPence);
 
-  let pqResult = { status: 'not_required' };
+  let pqResult = { status: 'not_required', outcome: 'not_required' };
   if (shouldSyncPriorityQueue) {
-    const pqError = await addToPriorityQueue(order.steamId64);
-    pqResult = pqError
-      ? { status: 'failed', error: pqError.message || String(pqError) }
-      : { status: 'succeeded' };
+    const syncResult = await addToPriorityQueueDetailed(order.steamId64);
+
+    if (syncResult.status === 'failed') {
+      pqResult = {
+        status: 'failed',
+        outcome: 'failed',
+        error: syncResult.error?.message || syncResult.output || 'Unknown CF Tools Priority Queue error.',
+      };
+    } else {
+      pqResult = {
+        status: 'succeeded',
+        outcome: syncResult.status === 'already_present' ? 'already_present' : 'added',
+      };
+    }
   }
 
   const attentionRequired = roleResult.status === 'failed' || pqResult.status === 'failed';
@@ -580,6 +590,7 @@ async function completeExternalFulfilment(order, guild, shouldSyncPriorityQueue)
         roleUpdateStatus: roleResult.status,
         roleUpdateError: roleResult.error || undefined,
         priorityQueueSyncStatus: pqResult.status,
+        priorityQueueSyncOutcome: pqResult.outcome || undefined,
         priorityQueueSyncError: pqResult.error || undefined,
       },
     }

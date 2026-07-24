@@ -9,6 +9,7 @@ const {
   priorityQueueReceiptDescription,
 } = require('../services/supportText');
 const { normalizePlayerName } = require('../utils/playerNames');
+const { isAlreadyPresentPriorityQueueResponse } = require('../services/priorityQueue');
 
 assert.strictEqual(support.poundsToPence(20), 2000);
 assert.strictEqual(support.tokensForAmountPence(2000), 2000);
@@ -35,6 +36,12 @@ assert.strictEqual(
   describePriorityQueue({ kind: 'none' }, 'pending'),
   'No Priority Queue included for an individual purchase below £20'
 );
+
+assert.strictEqual(isAlreadyPresentPriorityQueueResponse('Request failed with status code 409'), true);
+assert.strictEqual(isAlreadyPresentPriorityQueueResponse('Player already exists in priority queue'), true);
+assert.strictEqual(isAlreadyPresentPriorityQueueResponse('Duplicate priority queue entry'), true);
+assert.strictEqual(isAlreadyPresentPriorityQueueResponse('Request failed with status code 401'), false);
+assert.strictEqual(isAlreadyPresentPriorityQueueResponse('connect ETIMEDOUT'), false);
 assert.strictEqual(formatReceiptMoney(2000), 'GBP 20.00');
 assert.strictEqual(priorityQueueReceiptDescription({ kind: 'already_unlimited' }), 'Lifetime Priority Queue was already active');
 assert.strictEqual(sanitizePdfText("£20 – player's"), "GBP 20 - player's");

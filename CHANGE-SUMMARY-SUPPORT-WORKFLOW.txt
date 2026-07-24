@@ -53,3 +53,9 @@ PQ DISPLAY AND RECEIPT POLISH UPDATE
 - Evidence PDF now has bold section headings, page numbers, labelled PQ before/after status,
   mapped Rank ID Card names, and a concise human-readable audit timeline.
 - The full machine-readable terms snapshot and complete audit data remain in the signed JSON receipt.
+
+CF Tools idempotent Priority Queue update
+- Treats an existing/duplicate CF Tools Priority Queue entry and HTTP 409 Conflict as a successful no-op.
+- Keeps genuine authentication, network, configuration and other CF Tools failures visible.
+- Records whether the CF Tools entry was newly added or already present.
+- Prevents repeat supporters from receiving misleading "staff action required" messages solely because their permanent CF Tools entry already exists.

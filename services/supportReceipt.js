@@ -57,6 +57,19 @@ function priorityQueueStatus(pq, when) {
   return iso(expiry);
 }
 
+
+function formatPriorityQueueSync(order) {
+  if (order.priorityQueueSyncStatus === 'not_required') return 'Not required';
+  if (order.priorityQueueSyncStatus === 'failed') {
+    return `Failed${order.priorityQueueSyncError ? ` - ${order.priorityQueueSyncError}` : ''}`;
+  }
+  if (order.priorityQueueSyncOutcome === 'already_present') {
+    return 'Confirmed: player was already present in CF Tools Priority Queue';
+  }
+  if (order.priorityQueueSyncStatus === 'succeeded') return 'Succeeded: CF Tools entry added';
+  return order.priorityQueueSyncStatus || 'Not recorded';
+}
+
 function cardLabels(cards) {
   if (!Array.isArray(cards) || cards.length === 0) return 'None';
   return cards
@@ -119,6 +132,16 @@ function eventSummaryLines(event) {
       lines.push(
         `Status: ${data.status || 'Not recorded'} | Rank: ${data.rankKey || 'Not recorded'} | Role ID: ${data.roleId || 'Not recorded'}`
       );
+      break;
+    case 'cftools_pq_sync_succeeded':
+      lines.push(
+        data.outcome === 'already_present'
+          ? 'CF Tools result: player was already present in Priority Queue; treated as an idempotent success.'
+          : 'CF Tools result: Priority Queue entry added successfully.'
+      );
+      break;
+    case 'cftools_pq_sync_failed':
+      lines.push(`CF Tools result: failed${data.error ? ` - ${data.error}` : ''}`);
       break;
     case 'donation_tokens_claimed':
       lines.push(
@@ -201,6 +224,7 @@ async function buildSupportReceipt(orderId) {
       roleUpdateStatus: order.roleUpdateStatus,
       roleUpdateError: order.roleUpdateError,
       priorityQueueSyncStatus: order.priorityQueueSyncStatus,
+      priorityQueueSyncOutcome: order.priorityQueueSyncOutcome,
       priorityQueueSyncError: order.priorityQueueSyncError,
     },
     currentAccountSnapshot: donation
@@ -264,7 +288,7 @@ async function buildSupportReceipt(orderId) {
     `Priority Queue outcome: ${priorityQueueReceiptDescription(pq)}`,
     `Priority Queue status before: ${priorityQueueStatus(pq, 'before')}`,
     `Priority Queue status after: ${priorityQueueStatus(pq, 'after')}`,
-    `CF Tools PQ sync: ${order.priorityQueueSyncStatus || 'Not recorded'}`,
+    `CF Tools PQ sync: ${formatPriorityQueueSync(order)}`,
     `Discord role update: ${order.roleUpdateStatus || 'Not recorded'}`,
     `Fulfilled at: ${iso(order.fulfilledAt)}`,
     '',

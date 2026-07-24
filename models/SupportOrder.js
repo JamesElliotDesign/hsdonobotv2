@@ -100,6 +100,10 @@ const SupportOrderSchema = new mongoose.Schema(
       enum: ['not_required', 'pending', 'succeeded', 'failed'],
       default: 'pending',
     },
+    priorityQueueSyncOutcome: {
+      type: String,
+      enum: ['not_required', 'added', 'already_present', 'failed'],
+    },
     priorityQueueSyncError: { type: String },
 
     expiresAt: { type: Date, required: true, index: true },
